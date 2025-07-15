@@ -51,9 +51,43 @@ func main() {
 	e.GET("/users", getUsers)
 	e.GET("/users/:id", getUserByID)
 	e.POST("/users", createUser)
-
+	e.PUT("/users/:id", updateUser)
+	e.DELETE("/users/:id", deleteUser)
 	e.Start(":8080")
 }
+
+
+
+// @Summary Update user by ID
+// @Description Update an existing user by ID
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param id path int true "User ID"
+// @Param user body User true "Updated user object"
+// @Success 200 {object} User
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /users/{id} [put]
+func updateUser(c echo.Context) error {
+	id := c.Param("id")
+	userID, err := strconv.Atoi(id)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid user ID"})
+	}
+	var updateUser User 
+	if err := c.Bind(&updateUser); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid request payload"})
+	}
+	for i, user:= range users {
+		if user.ID == userID{
+			updateUser.ID = userID
+			users[i] = updateUser
+			return c.JSON(http.StatusOK, updateUser)
+		}
+	}
+	return c.JSON(http.StatusNotFound, ErrorResponse{Message: "User not found"})
+ }
 
 // @Summary Endpoint create a new user
 // @Description Create a new user with name, age, and address
@@ -118,3 +152,35 @@ func getUsers(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, users)
 }
+
+// @Summary Delete user by ID
+// @Description Delete a user by ID
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param id path int true "User ID"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /users/{id} [delete]
+func deleteUser(c echo.Context) error {
+	id := c.Param("id") 
+	userID, err := strconv.Atoi(id)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid user ID"})
+	}
+	var checkUser User 
+	if err := c.Bind(&checkUser); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid request payload"})
+	}
+	
+	for i, user := range users {
+		if user.ID == userID {
+			users = append(users[:i], users[i+1:]...)
+			return c.JSON(http.StatusOK, map[string]string{"message": "User deleted successfully"})
+		}
+	}
+	return c.JSON(http.StatusNotFound, ErrorResponse{Message: "User not found"})
+}
+
+
