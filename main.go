@@ -51,6 +51,8 @@ func main() {
 	e.GET("/users", getUsers)
 	e.GET("/users/:id", getUserByID)
 	e.POST("/users", createUser)
+	e.PUT("/users/:id", updateUser)
+	e.DELETE("/users/:id", deleteUser)
 
 	e.Start(":8080")
 }
@@ -117,4 +119,64 @@ func getUsers(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, ErrorResponse{Message: "No users found"})
 	}
 	return c.JSON(http.StatusOK, users)
+}
+
+// @Summary Update user by ID
+// @Description Update user details by user ID
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param id path int true "User ID"
+// @Param user body User true "User object"
+// @Success 200 {object} User
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /users/{id} [put]
+func updateUser(c echo.Context) error {
+	id := c.Param("id") // mengambil parameter yang akan diupdate yaitu "id"
+	IDInt, err := strconv.Atoi(id)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid user ID"})
+	}
+
+	var updatedUser User       // membuat variabel untuk update data user
+	err = c.Bind(&updatedUser) // bind adalah untuk request ke variabel updatedUser
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid request payload"})
+	}
+
+	for i, user := range users {
+		if user.ID == IDInt {
+			users[i] = updatedUser // untuk mengupdate data user
+			return c.JSON(http.StatusOK, updatedUser)
+		}
+	}
+	return c.JSON(http.StatusNotFound, ErrorResponse{Message: "User not found"})
+}
+
+// @Summary Delete user by ID
+// @Description Delete user by user ID
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param id path int true "User ID"
+// @Success 204
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /users/{id} [delete]
+func deleteUser(c echo.Context) error {
+	id := c.Param("id")            // mengambil parameter yang akan didelete yaitu "id"
+	IDInt, err := strconv.Atoi(id) // konversi string ke integer
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid user ID"})
+	}
+
+	// mencari user dengan ID yang sesuai
+	for i, user := range users {
+		if user.ID == IDInt {
+			users = append(users[:i], users[i+1:]...) // menghapus user dari slice
+			return c.NoContent(http.StatusNoContent)
+		}
+	}
+	return c.JSON(http.StatusNotFound, ErrorResponse{Message: "User not found"})
 }
