@@ -16,43 +16,54 @@ package main
 // @BasePath /
 
 import (
+	"database/sql"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
 	_ "go-echo-101/docs"
 
 	"github.com/labstack/echo/v4"
+	_ "github.com/lib/pq" // PostgreSQL driver
 	echoSwagger "github.com/swaggo/echo-swagger"
 )
 
 // object atau class User
 type User struct {
-	ID      int    `json:"id"`
-	Name    string `json:"name"`
-	Age     int    `json:"age"`
-	Address string `json:"address"`
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+	// Age     int    `json:"age"`
+	// Address string `json:"address"`
 }
 
 type ErrorResponse struct {
 	Message string `json:"message"`
 }
 
-var users = []User{
-	{ID: 1, Name: "John Doe", Age: 30, Address: "123 Main St"},
-	{ID: 2, Name: "Jane Smith", Age: 25, Address: "456 Elm St"},
-	{ID: 3, Name: "Alice Johnson", Age: 28, Address: "789 Oak St"},
-	{ID: 4, Name: "Bob Brown", Age: 35, Address: "101 Pine St"},
-}
+var users = []User{}
+var db *sql.DB
 
 func main() {
-	e := echo.New()
+	db = connectToDatabase()
 
+	e := echo.New()
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
 	e.GET("/users", getUsers)
 	e.GET("/users/:id", getUserByID)
 	e.POST("/users", createUser)
 
 	e.Start(":8080")
+}
+
+func connectToDatabase() *sql.DB {
+	connStr := "postgres://milhamsuryapratama:@localhost:5432/postgres?sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return db
 }
 
 // @Summary Endpoint create a new user
@@ -71,11 +82,26 @@ func createUser(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid request payload"})
 	}
 
-	if newUser.Name == "" {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Name is required"})
+	tx, err := db.Begin()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
 	}
 
-	users = append(users, newUser)
+	_, err = tx.Exec("INSERT INTO users (name, email) VALUES ($1, $2)", "Test Transaction 3", "Test Transaction 3")
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
+	}
+
+	_, err = tx.Exec("INSERT INTO users (name, email) VALUES ($1, $2)", "Test Transaction 3", "Test Transaction 3")
+	if err != nil {
+		tx.Rollback()
+		fmt.Println("Error inserting user:", err)
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
+	}
+
+	tx.Commit()
+	fmt.Println("User created successfully:", newUser)
+
 	return c.JSON(http.StatusCreated, newUser)
 }
 
@@ -113,8 +139,24 @@ func getUserByID(c echo.Context) error {
 // @Failure 404 {object} ErrorResponse
 // @Router /users [get]
 func getUsers(c echo.Context) error {
-	if len(users) == 0 {
-		return c.JSON(http.StatusNotFound, ErrorResponse{Message: "No users found"})
+	rows, err := db.Query("SELECT * FROM users")
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Message: "Error retrieving users"})
 	}
-	return c.JSON(http.StatusOK, users)
+	// defer db.Close()
+	defer rows.Close()
+
+	var usersFromDB []User
+	for rows.Next() {
+		var user User
+		if err := rows.Scan(&user.ID, &user.Name, &user.Email); err != nil {
+			return c.JSON(http.StatusInternalServerError, ErrorResponse{Message: "Error scanning user data"})
+		}
+		usersFromDB = append(usersFromDB, user)
+	}
+	if err := rows.Err(); err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Message: "Error processing user data"})
+	}
+
+	return c.JSON(http.StatusOK, usersFromDB)
 }
