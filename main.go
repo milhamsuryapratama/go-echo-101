@@ -12,7 +12,7 @@ package main
 // @license.name Apache 2.0
 // @license.url http://www.apache.org/licenses/LICENSE-2.0.html
 
-// @host localhost:8080
+// @host localhost:3000
 // @BasePath /
 
 import (
@@ -37,6 +37,10 @@ type ErrorResponse struct {
 	Message string `json:"message"`
 }
 
+type DeleteResponse struct {
+	Message string `json:"message"`
+}
+
 var users = []User{
 	{ID: 1, Name: "John Doe", Age: 30, Address: "123 Main St"},
 	{ID: 2, Name: "Jane Smith", Age: 25, Address: "456 Elm St"},
@@ -51,8 +55,10 @@ func main() {
 	e.GET("/users", getUsers)
 	e.GET("/users/:id", getUserByID)
 	e.POST("/users", createUser)
+	e.PUT("/users/:id", updateUsersById)
+	e.DELETE("/users/:id", deleteUserByID)
 
-	e.Start(":8080")
+	e.Start(":3000")
 }
 
 // @Summary Endpoint create a new user
@@ -118,3 +124,76 @@ func getUsers(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, users)
 }
+
+
+// @Summary Update user by ID
+// @Description Update user details by user ID
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param id path int true "User ID"
+// @Param user body User true "User object"
+// @Success 200 {object} User
+// @Failure 404 {object} ErrorResponse
+// @Failure 400 {object} ErrorResponse
+// @Router /users/{id} [put]
+func updateUsersById (c echo.Context) error {
+	id := c.Param("id")
+	IDInt, err := strconv.Atoi(id)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid user ID"})
+	}
+
+	var updatedUser User
+	if err := c.Bind(&updatedUser); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid request payload"})
+	}
+
+	if updatedUser.Name == "" {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Name is required"})
+	}
+
+	for i, user := range users {
+		if user.ID == IDInt {
+			users[i].Name = updatedUser.Name
+			if updatedUser.Age != 0 {
+				users[i].Age = updatedUser.Age
+			}
+			if updatedUser.Address != "" {
+				users[i].Address = updatedUser.Address
+			}
+			return c.JSON(http.StatusOK, users[i])
+		}
+	}
+
+	return c.JSON(http.StatusNotFound, ErrorResponse{Message: "User not found"})
+}
+
+// @Summary Delete user by ID
+// @Description Delete a user by their ID
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param id path int true "User ID"
+// @Success 200 {object} DeleteResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /users/{id} [delete]
+func deleteUserByID(c echo.Context) error {
+	id := c.Param("id")
+	IDInt, err := strconv.Atoi(id)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid user ID"})
+	}
+
+	for i, user := range users {
+		if user.ID == IDInt {
+			// Delete user from slice
+			users = append(users[:i], users[i+1:]...)
+			return c.JSON(http.StatusOK, DeleteResponse{Message: "User deleted successfully"})
+		}
+	}
+
+	return c.JSON(http.StatusNotFound, ErrorResponse{Message: "User not found"})
+}
+
