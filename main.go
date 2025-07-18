@@ -15,6 +15,8 @@ package main
 // @host localhost:8080
 // @BasePath /
 
+// openssl genrsa -out new_private.pem 2048
+
 import (
 	"database/sql"
 	"fmt"
@@ -22,6 +24,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"go-echo-101/auth"
 	_ "go-echo-101/docs"
 
 	"github.com/labstack/echo/v4"
@@ -49,12 +52,22 @@ func main() {
 	db = connectToDatabase()
 
 	e := echo.New()
-	e.GET("/swagger/*", echoSwagger.WrapHandler)
-	e.GET("/users", getUsers)
-	e.GET("/users/:id", getUserByID)
-	e.POST("/users", createUser)
 
-	e.Start(":8080")
+	e.GET("/generate-token", auth.GenerateTokenJWT) // login
+	e.GET("/validate-token", auth.ValidateTokenJWT)
+	e.GET("/refresh-token", auth.ValidateRefreshToken)
+
+	group := e.Group("/api/v1")
+	group.Use(auth.AuthMiddleware)
+
+	// Swagger documentation
+	e.GET("/swagger/*", echoSwagger.WrapHandler)
+	group.GET("/swagger/*", echoSwagger.WrapHandler)
+	group.GET("/users", getUsers)
+	group.GET("/users/:id", getUserByID)
+	group.POST("/users", createUser)
+
+	e.Start(":8000")
 }
 
 func connectToDatabase() *sql.DB {
