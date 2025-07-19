@@ -23,9 +23,12 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"go-echo-101/auth"
 	_ "go-echo-101/docs"
+
+	"github.com/fatih/color"
 
 	"github.com/labstack/echo/v4"
 	_ "github.com/lib/pq" // PostgreSQL driver
@@ -45,6 +48,22 @@ type ErrorResponse struct {
 
 var db *sql.DB
 
+func printAvailableEndpoints(e *echo.Echo) {
+	cyan := color.New(color.FgCyan).SprintFunc()
+	bold := color.New(color.Bold).SprintFunc()
+	underline := color.New(color.Underline).SprintFunc()
+
+	log.Println(cyan("Available API endpoints:"))
+	for _, route := range e.Routes() {
+		// filter untuk menghindari route yang tidak relevan
+		if route.Name == "github.com/labstack/echo/v4.init.func1" {
+			continue
+		}
+		// fmt.Println(route.Name)
+		log.Printf("%s %s", bold(route.Method), underline(route.Path))
+	}
+}
+
 func main() {
 	// Inisialisasi koneksi ke database
 	db = connectToDatabase()
@@ -63,6 +82,11 @@ func main() {
 	group.PUT("/users/:id", updateUser)
 	group.DELETE("/users/:id", deleteUser)
 
+	// menampilkan daftar endpoint yang tersedia setelah server berjalan
+	go func() {
+		time.Sleep(500 * time.Millisecond) // Tunggu server start
+		printAvailableEndpoints(e)
+	}()
 	// Menjalankan server pada port 8080
 	e.Logger.Fatal(e.Start(":8080"))
 }
