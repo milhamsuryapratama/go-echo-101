@@ -1,5 +1,17 @@
 basePath: /
 definitions:
+  auth.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+  auth.ReqLogin:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
   main.ErrorResponse:
     properties:
       message:
@@ -28,11 +40,11 @@ info:
   title: Echo API
   version: "1.0"
 paths:
-  /users:
+  /api/v1/users:
     get:
       consumes:
       - application/json
-      description: Retrieve a list of all users
+      description: Get a list of all users
       produces:
       - application/json
       responses:
@@ -42,10 +54,12 @@ paths:
             items:
               $ref: '#/definitions/main.User'
             type: array
-        "404":
-          description: Not Found
+        "500":
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/main.ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Get all users
       tags:
       - users
@@ -71,10 +85,12 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/main.ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Endpoint create a new user
       tags:
       - users
-  /users/{id}:
+  /api/v1/users/{id}:
     delete:
       consumes:
       - application/json
@@ -98,6 +114,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/main.ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Delete user by ID
       tags:
       - users
@@ -126,6 +144,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/main.ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Get user by ID
       tags:
       - users
@@ -160,7 +180,74 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/main.ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Update user by ID
       tags:
       - users
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Generate access token and refresh token for user login
+      parameters:
+      - description: ReqLogin object
+        in: body
+        name: req_login
+        required: true
+        schema:
+          $ref: '#/definitions/auth.ReqLogin'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Generate JWT
+      tags:
+      - auth
+  /refresh_token:
+    post:
+      consumes:
+      - application/json
+      description: Refresh access token using refresh token
+      parameters:
+      - description: Refresh token
+        in: body
+        name: refreshToken
+        required: true
+        schema:
+          $ref: '#/definitions/auth.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Refresh Access Token
+      tags:
+      - auth
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

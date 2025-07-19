@@ -14,6 +14,9 @@ package main
 
 // @host localhost:8080
 // @BasePath /
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 
 import (
 	"database/sql"
@@ -21,6 +24,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"go-echo-101/auth"
 	_ "go-echo-101/docs"
 
 	"github.com/labstack/echo/v4"
@@ -42,17 +46,25 @@ type ErrorResponse struct {
 var db *sql.DB
 
 func main() {
+	// Inisialisasi koneksi ke database
 	db = connectToDatabase()
 
 	e := echo.New()
-	e.GET("/swagger/*", echoSwagger.WrapHandler)
-	e.GET("/users", getUsers)
-	e.POST("/users", createUser)
-	e.GET("/users/:id", getUserByID)
-	e.PUT("/users/:id", updateUser)
-	e.DELETE("/users/:id", deleteUser)
 
-	e.Start(":8080")
+	e.GET("/swagger/*", echoSwagger.WrapHandler)
+	e.POST("/login", auth.GenerateJWT)                // Endpoint untuk generate JWT (login user)
+	e.POST("/refresh_token", auth.RefreshAccessToken) // Endpoint untuk refresh access token
+
+	group := e.Group("/api/v1") // Grouping endpoint dengan prefix /api/v1
+	group.Use(auth.JWTMiddleware)
+	group.GET("/users", getUsers)
+	group.POST("/users", createUser)
+	group.GET("/users/:id", getUserByID)
+	group.PUT("/users/:id", updateUser)
+	group.DELETE("/users/:id", deleteUser)
+
+	// Menjalankan server pada port 8080
+	e.Logger.Fatal(e.Start(":8080"))
 }
 
 func connectToDatabase() *sql.DB {
@@ -70,10 +82,11 @@ func connectToDatabase() *sql.DB {
 // @Tags users
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param user body User true "User object"
 // @Success 201 {object} User
 // @Failure 400 {object} ErrorResponse
-// @Router /users [post]
+// @Router /api/v1/users [post]
 func createUser(c echo.Context) error {
 	var newUser User
 	err := c.Bind(&newUser)
@@ -108,11 +121,12 @@ func createUser(c echo.Context) error {
 // @Tags users
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param id path int true "User ID"
 // @Success 200 {object} User
 // @Failure 404 {object} ErrorResponse
 // @Failure 400 {object} ErrorResponse
-// @Router /users/{id} [get]
+// @Router /api/v1/users/{id} [get]
 func getUserByID(c echo.Context) error {
 	id := c.Param("id")
 	IDInt, err := strconv.Atoi(id)
@@ -138,13 +152,14 @@ func getUserByID(c echo.Context) error {
 }
 
 // @Summary Get all users
-// @Description Retrieve a list of all users
+// @Description Get a list of all users
 // @Tags users
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Success 200 {array} User
-// @Failure 404 {object} ErrorResponse
-// @Router /users [get]
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/users [get]
 func getUsers(c echo.Context) error {
 	rows, err := db.Query("SELECT id, name, email FROM user_try")
 	if err != nil {
@@ -171,12 +186,13 @@ func getUsers(c echo.Context) error {
 // @Tags users
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param id path int true "User ID"
 // @Param user body User true "User object"
 // @Success 200 {object} User
 // @Failure 404 {object} ErrorResponse
 // @Failure 400 {object} ErrorResponse
-// @Router /users/{id} [put]
+// @Router /api/v1/users/{id} [put]
 func updateUser(c echo.Context) error {
 	var updatedUser User
 	if err := c.Bind(&updatedUser); err != nil {
@@ -217,11 +233,12 @@ func updateUser(c echo.Context) error {
 // @Tags users
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param id path int true "User ID"
 // @Success 204
 // @Failure 404 {object} ErrorResponse
 // @Failure 400 {object} ErrorResponse
-// @Router /users/{id} [delete]
+// @Router /api/v1/users/{id} [delete]
 func deleteUser(c echo.Context) error {
 	id := c.Param("id")
 	IDInt, err := strconv.Atoi(id)
