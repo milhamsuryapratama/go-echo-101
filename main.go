@@ -16,12 +16,15 @@ package main
 // @BasePath /
 
 import (
+	"database/sql"
+	"fmt"
+	_ "go-echo-101/docs"
+	"log"
 	"net/http"
 	"strconv"
 
-	_ "go-echo-101/docs"
-
 	"github.com/labstack/echo/v4"
+	_ "github.com/lib/pq"
 	echoSwagger "github.com/swaggo/echo-swagger"
 )
 
@@ -45,8 +48,9 @@ var users = []User{
 }
 
 func main() {
+	db := connectToDatabase()
+	defer db.Close()
 	e := echo.New()
-
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
 	e.GET("/users", getUsers)
 	e.GET("/users/:id", getUserByID)
@@ -55,6 +59,23 @@ func main() {
 	e.DELETE("/users/:id", deleteUser)
 	e.Start(":8080")
 }
+
+func connectToDatabase() *sql.DB{
+	connStr := "user=postgres dbname=postgres password=polkmn1234 host=localhost port=5432 sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+	err = db.Ping()
+	if err != nil {
+		log.Fatal("Database Connection Failed: ", err)
+	}
+	fmt.Println("Database Connected Successfully")
+	return db
+}
+
+// func createUser(db *sql.DB, users User) error {
+// 	query := "INSERT INTO public.users (name, age, address) values ($1, $2, $3) RETURNING id"
+// 	_, err := db.Exec(query, users.Name, users.Age, users.Address)
+// 	return err
+// }
 
 
 
@@ -70,24 +91,27 @@ func main() {
 // @Failure 404 {object} ErrorResponse
 // @Router /users/{id} [put]
 func updateUser(c echo.Context) error {
+	db := connectToDatabase()
+	defer db.Close()
 	id := c.Param("id")
 	userID, err := strconv.Atoi(id)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid user ID"})
 	}
-	var updateUser User 
+	var updateUser User
 	if err := c.Bind(&updateUser); err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid request payload"})
 	}
-	for i, user:= range users {
-		if user.ID == userID{
-			updateUser.ID = userID
-			users[i] = updateUser
-			return c.JSON(http.StatusOK, updateUser)
+	query := "UPDATE users SET name = $1, age = $2, address = $3 WHERE id = $4 RETURNING id"
+	err = db.QueryRow(query, updateUser.Name, updateUser.Age, updateUser.Address, userID).Scan(&updateUser.ID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return c.JSON(http.StatusNotFound, ErrorResponse{Message: "User not found"})
 		}
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Message: "Failed to update user"})
 	}
-	return c.JSON(http.StatusNotFound, ErrorResponse{Message: "User not found"})
- }
+	return c.JSON(http.StatusOK, updateUser)
+}
 
 // @Summary Endpoint create a new user
 // @Description Create a new user with name, age, and address
@@ -99,17 +123,18 @@ func updateUser(c echo.Context) error {
 // @Failure 400 {object} ErrorResponse
 // @Router /users [post]
 func createUser(c echo.Context) error {
+	db:=connectToDatabase()
+	defer db.Close()
+
 	var newUser User
 	err := c.Bind(&newUser)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid request payload"})
 	}
-
-	if newUser.Name == "" {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Name is required"})
+	_, err = db.Exec("INSERT INTO users (name,age,address) values ($1, $2, $3)",newUser.Name, newUser.Age, newUser.Address)
+	if err != nil {
+		log.Fatal("Error inserting user : %v", err)
 	}
-
-	users = append(users, newUser)
 	return c.JSON(http.StatusCreated, newUser)
 }
 
@@ -124,18 +149,24 @@ func createUser(c echo.Context) error {
 // @Failure 400 {object} ErrorResponse
 // @Router /users/{id} [get]
 func getUserByID(c echo.Context) error {
+	db := connectToDatabase()
+	defer db.Close()
+
 	id := c.Param("id")
 	IDInt, err := strconv.Atoi(id)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid user ID"})
 	}
-
-	for _, user := range users {
-		if user.ID == IDInt {
-			return c.JSON(http.StatusOK, user)
+	var user User
+	query:= "SELECT id, name, age, address FROM users WHERE id = $1"
+	err = db.QueryRow(query, IDInt).Scan(&user.ID, &user.Name, &user.Age, &user.Address)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return c.JSON(http.StatusNotFound, ErrorResponse{Message: "User not found"})
 		}
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Message: "Failed to fetch user"})
 	}
-	return c.JSON(http.StatusNotFound, ErrorResponse{Message: "User not found"})
+	return c.JSON(http.StatusOK, user)
 }
 
 // @Summary Get all users
@@ -147,10 +178,24 @@ func getUserByID(c echo.Context) error {
 // @Failure 404 {object} ErrorResponse
 // @Router /users [get]
 func getUsers(c echo.Context) error {
-	if len(users) == 0 {
-		return c.JSON(http.StatusNotFound, ErrorResponse{Message: "No users found"})
+	db := connectToDatabase()
+	rows,err := db.Query("Select * from users")
+	if err != nil {
+		return err
 	}
-	return c.JSON(http.StatusOK, users)
+	defer rows.Close()
+	var usersDb []User
+	for rows.Next(){
+		var user User
+		if err := rows.Scan(&user.ID, &user.Name, &user.Age, &user.Address); err != nil {
+			return err
+		}
+		usersDb = append(usersDb, user)
+	}
+	if err = rows.Err(); err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, usersDb)
 }
 
 // @Summary Delete user by ID
@@ -164,23 +209,25 @@ func getUsers(c echo.Context) error {
 // @Failure 404 {object} ErrorResponse
 // @Router /users/{id} [delete]
 func deleteUser(c echo.Context) error {
+	db:=connectToDatabase()
+	defer db.Close()
+
 	id := c.Param("id") 
 	userID, err := strconv.Atoi(id)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid user ID"})
 	}
-	var checkUser User 
-	if err := c.Bind(&checkUser); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid request payload"})
+	query := "Delete from users where id = $1"
+	result, err := db.Exec(query,userID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Message: "Failed to Delete User" })
 	}
-	
-	for i, user := range users {
-		if user.ID == userID {
-			users = append(users[:i], users[i+1:]...)
-			return c.JSON(http.StatusOK, map[string]string{"message": "User deleted successfully"})
-		}
+	rowsAffected, err :=  result.RowsAffected()
+	fmt.Println("Row Affected",rowsAffected, err)
+	if rowsAffected == 0 {
+		return c.JSON(http.StatusNotFound, ErrorResponse{Message: "User not found"})
 	}
-	return c.JSON(http.StatusNotFound, ErrorResponse{Message: "User not found"})
+	return c.JSON(http.StatusOK, ErrorResponse{Message: "User successfully deleted"})
 }
 
 
