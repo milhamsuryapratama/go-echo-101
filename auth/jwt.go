@@ -51,6 +51,7 @@ func GenerateTokenJWT(c echo.Context) error {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"username": "milhamsuryapratama",
 		"email":    "ilham@gmail.com",
+		"role":     "admin",
 		"exp":      time.Now().Add(1 * time.Minute).Unix(),
 	})
 
@@ -103,7 +104,8 @@ func ValidateTokenJWT(c echo.Context) error {
 		return errors.New("invalid token")
 	}
 
-	if _, ok := token.Claims.(jwt.MapClaims); ok {
+	if user, ok := token.Claims.(jwt.MapClaims); ok {
+		c.Set("user", user)
 		return nil
 	}
 
@@ -114,6 +116,26 @@ func AuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		if err := ValidateTokenJWT(c); err != nil {
 			return c.JSON(http.StatusUnauthorized, map[string]string{"message": err.Error()})
+		}
+		return next(c)
+	}
+}
+
+func ValidateAdminRole(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		user := c.Get("admin").(jwt.MapClaims)
+		if user["role"].(string) != "admin" {
+			return c.JSON(http.StatusForbidden, map[string]string{"message": "forbidden"})
+		}
+		return next(c)
+	}
+}
+
+func ValidateUserRole(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		user := c.Get("user").(jwt.MapClaims)
+		if user["role"].(string) != "user" {
+			return c.JSON(http.StatusForbidden, map[string]string{"message": "forbidden"})
 		}
 		return next(c)
 	}

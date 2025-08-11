@@ -50,15 +50,22 @@ var db *sql.DB
 
 func main() {
 	db = connectToDatabase()
+	redis := connectToRedis()
 
 	e := echo.New()
 
 	e.GET("/generate-token", auth.GenerateTokenJWT) // login
 	e.GET("/validate-token", auth.ValidateTokenJWT)
 	e.GET("/refresh-token", auth.ValidateRefreshToken)
+	e.POST("/uploads", upload)
 
-	group := e.Group("/api/v1")
+	group := e.Group("/admin")
 	group.Use(auth.AuthMiddleware)
+	group.Use(auth.ValidateAdminRole)
+
+	user := e.Group("/user")
+	user.Use(auth.AuthMiddleware)
+	user.Use(auth.ValidateUserRole)
 
 	// Swagger documentation
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
@@ -67,7 +74,77 @@ func main() {
 	group.GET("/users/:id", getUserByID)
 	group.POST("/users", createUser)
 
+	go startRedisConsumer()
+
 	e.Start(":8000")
+}
+
+func startRedisConsumer() {
+	for {
+		redis.BRpop(ctx, 0, queuname).Result()
+	}
+}
+
+func upload(c echo.Context) error {
+	fmt.Println("start upload")
+	// http://localhost:8000/temp/Screenshot%202025-07-19%20at%2015.07.02.png
+	// http://localhost:8000/uploads/Screenshot%202025-07-19%20at%2015.07.02.png
+
+	// c.Bind(&request)
+	// if strings.Contains(request.ImageURL, "temp") {
+	// 	// Handle the case where the image is in the temp directory
+	// }
+
+	// file, err := os.Open(request.ImageURL) // Opens "example.txt" for reading
+	// if err != nil {
+	// 	log.Fatal("err", err) // Handle potential errors (e.g., file not found)
+	// }
+	// defer file.Close()
+
+	// filename := filepath.Base(file.Name())
+
+	// Destination
+	// dst, err := os.Create("uploads/" + filename) // Creates "example_copy.txt" for writing
+	// if err != nil {
+	// 	log.Fatal("err", err)
+	// }
+	// defer dst.Close()
+
+	// // Copy
+	// if _, err = io.Copy(dst, file); err != nil {
+	// 	return err
+	// }
+
+	// os.Remove("temp/" + filename) // Remove the file from the temp directory
+	// os.Remove("uploads/" + filename)
+
+	// file.
+	// file, err := c.FormFile("file")
+	// if err != nil {
+	// 	return err
+	// }
+
+	// fmt.Println("Uploaded file:", file.Filename)
+	// fmt.Println("File size:", file.Size)
+
+	// src, err := file.Open()
+	// if err != nil {
+	// 	return err
+	// }
+	// defer src.Close()
+
+	// // Destination
+	// dst, err := os.Create("temp/" + file.Filename)
+	// if err != nil {
+	// 	return err
+	// }
+	// defer dst.Close()
+
+	// // Copy
+	// if _, err = io.Copy(dst, src); err != nil {
+	// 	return err
+	// }
+	return nil
 }
 
 func connectToDatabase() *sql.DB {
@@ -94,6 +171,8 @@ func createUser(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid request payload"})
 	}
+
+	redis.LPush(ctx, "queuname", newUser)
 
 	tx, err := db.Begin()
 	if err != nil {
