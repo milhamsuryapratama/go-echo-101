@@ -5,7 +5,41 @@ definitions:
       message:
         type: string
     type: object
+  main.LoginUser:
+    properties:
+      name:
+        type: string
+      password:
+        type: string
+    type: object
+  main.SuccessResponseLogin:
+    properties:
+      data:
+        $ref: '#/definitions/main.Token'
+      message:
+        type: string
+    type: object
+  main.Token:
+    properties:
+      accessToken:
+        type: string
+      refreshToken:
+        type: string
+    type: object
   main.User:
+    properties:
+      address:
+        type: string
+      age:
+        type: integer
+      id:
+        type: integer
+      name:
+        type: string
+      password:
+        type: string
+    type: object
+  main.UserWithoutPassword:
     properties:
       address:
         type: string
@@ -35,6 +69,12 @@ paths:
       consumes:
       - application/json
       description: Retrieve a list of all users
+      parameters:
+      - description: Bearer <JWT Token>
+        in: header
+        name: Authorization
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -42,7 +82,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/main.User'
+              $ref: '#/definitions/main.UserWithoutPassword'
             type: array
         "404":
           description: Not Found
@@ -87,6 +127,11 @@ paths:
         name: id
         required: true
         type: integer
+      - description: Bearer <JWT Token>
+        in: header
+        name: Authorization
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -117,6 +162,11 @@ paths:
         name: id
         required: true
         type: integer
+      - description: Bearer <JWT Token>
+        in: header
+        name: Authorization
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -151,6 +201,11 @@ paths:
         required: true
         schema:
           $ref: '#/definitions/main.User'
+      - description: Bearer <JWT Token>
+        in: header
+        name: Authorization
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -167,6 +222,36 @@ paths:
           schema:
             $ref: '#/definitions/main.ErrorResponse'
       summary: Update user by ID
+      tags:
+      - users
+  /users/login:
+    post:
+      consumes:
+      - application/json
+      description: Login user with name and password
+      parameters:
+      - description: User login object
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/main.LoginUser'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.SuccessResponseLogin'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      summary: Endpoint for user login
       tags:
       - users
 swagger: "2.0"
